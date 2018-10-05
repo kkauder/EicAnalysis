@@ -432,7 +432,6 @@ EVENTRESULT EicAnalysis::RunEvent (){
   particles.clear();
 
   if ( pHardPartons ) pHardPartons->Clear();
-  if ( pHardPartonNames ) pHardPartonNames->Clear();
 
   switch (pars.intype) {
     // =====================================================
@@ -632,7 +631,7 @@ EVENTRESULT EicAnalysis::RunEvent (){
   }
   else return EVENTRESULT::NOTACCEPTED; // Let's focus on interesting events.
 
-  // hard partons?
+  // hard partons? WORK IN PROGRESS
   //cout << " ==================================================" << endl;
   for ( auto& parton : Remainder ){
     // ignore hadrons 
@@ -640,13 +639,7 @@ EVENTRESULT EicAnalysis::RunEvent (){
     if ( pdg > 100 &&  pdg < 1000 ) continue; // mesons
     if ( pdg > 2000 &&  pdg < 6000 ) continue; // baryons
     
-    //parton.Print();
-    //cout << "  --> pt = " << parton.GetPt() << "  y = " << parton.GetRapidity() << "  eta = " << parton.GetEta() << "  phi = " << parton.GetPhi() << endl;
   }
-  
-  // cout << "x = " << x << endl;  
-  // cout << Events->GetLeaf("trueX")->GetValue() << endl;
-  // cout  << endl;
 
   // Set Up Boost to Breit Frame
   // ---------------------------
@@ -698,7 +691,7 @@ EVENTRESULT EicAnalysis::RunEvent (){
   boosts[TRUEKINEMATICS]=boost_vectorT;
   boostedprotons[TRUEKINEMATICS]=boosted_protonT;
 
-  // Works?
+  // Are the boosts okay?
   bool checkboosts=true;
   if ( checkboosts ){
     for ( auto& toCheckPair : boosts ){
@@ -734,17 +727,28 @@ EVENTRESULT EicAnalysis::RunEvent (){
     // CUTS
     if ( e.GetPt()< pars.PtConsMin )             continue;
     if ( fabs( e.GetEta() )>pars.EtaConsCut )    continue;
-
+    
+    // Make pseudojet
     PseudoJet pj =  PseudoJet ( e.Get4Vector() );
+
+    // Attach information via user_info here
+    TParticlePDG* info = e.Id().Info();
+    if ( !info ) 	  throw std::runtime_error("Found unexpected PID");
+    auto qcharge=info->Charge();
+    auto pdgcode=info->PdgCode();
+    pj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
     lab_particles.push_back( pj );
 
-    // boost to Breit frame
+    // Boost and rotate to Breit Frame
     // TODO: Check this math!    
     PseudoJet boostedpj =  pj;
     boostedpj.boost ( breitboost );
     boostedpj = rotateZ(boostedpj, -phi_proton);
     boostedpj = rotateY(boostedpj, -theta_proton);
     boosted_particles.push_back( boostedpj);
+    
+    // UserInfo isn't copied (and gets lost during rotation anyway) 
+    boostedpj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
   }
 
   // Remaining hadrons
@@ -753,10 +757,18 @@ EVENTRESULT EicAnalysis::RunEvent (){
     if ( r.GetPt()< pars.PtConsMin )             continue;
     if ( fabs( r.GetEta() )>pars.EtaConsCut )    continue;
 
+    // Make pseudojet
     PseudoJet pj =  PseudoJet ( r.Get4Vector() );
+
+    // Attach information via user_info here
+    TParticlePDG* info = r.Id().Info();
+    if ( !info ) 	  throw std::runtime_error("Found unexpected PID");
+    auto qcharge=info->Charge();
+    auto pdgcode=info->PdgCode();
+    pj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
     lab_particles.push_back( pj );
 
-    // boost to Breit frame
+    // Boost and rotate to Breit Frame
     // TODO: Check this math!    
     PseudoJet boostedpj =  pj;
     boostedpj.boost ( breitboost );
@@ -764,6 +776,9 @@ EVENTRESULT EicAnalysis::RunEvent (){
     boostedpj = rotateY(boostedpj, -theta_proton);
     boosted_particles.push_back( boostedpj);
 
+    // UserInfo isn't copied (and gets lost during rotation anyway) 
+    boostedpj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
+    // cout << boostedpj.user_info<JetAnalysisConstituentInfo>().GetPdg() << endl;
   }
 
   // Which ones to use?
@@ -899,10 +914,6 @@ EVENTRESULT EicAnalysis::RunEvent (){
     sd.set_subtractor(pBackgroundSubtractor);
     sd.set_input_jet_is_subtracted( false );
   }
-  // cout << pBackgroundSubtractor->description() << endl;
-  // sd.set_input_jet_is_subtracted( true );
-  // sd.set_subtractor( 0 );
-  // contrib::SoftDrop::_verbose=true;
 
   int njets = JAResult.size();
   // cout << "-----------------------" << endl;
@@ -911,7 +922,6 @@ EVENTRESULT EicAnalysis::RunEvent (){
   for (unsigned ijet = 0; ijet < JAResult.size(); ijet++) {
     PseudoJet& CurrentJet = JAResult[ijet];
 
-    // charged jets are problematic
     // // Check whether it fulfills neutral energy fraction criteria
     // // This could be done earlier in the jet selector
     // PseudoJet NeutralPart = join ( OnlyNeutral( CurrentJet.constituents() ) );
@@ -927,42 +937,9 @@ EVENTRESULT EicAnalysis::RunEvent (){
     // CurrentJet.set_user_info ( userinfo );
 
     // if ( pars.MaxJetNEF<1.0 &&  NeutralPart.pt()  / CurrentJet.pt() > pars.MaxJetNEF ) continue;
-
-    // DEBUG - Recluster now
-    // Well, good-ish. That doesn't make a difference in pt
-    // cout << CurrentJet.pt() << " ---> ";
-    // JetAnalysisUserInfo userinfo = CurrentJet.user_info<JetAnalysisUserInfo> ();
-    // JetAnalysisUserInfo* newuserinfo = new JetAnalysisUserInfo( userinfo.GetQuarkCharge(), userinfo.GetTag(), userinfo.GetNumber() );
-    // PseudoJet newjet = contrib::Recluster(cambridge_algorithm, JetDef.max_allowable_R)( CurrentJet );
-    // if ( fabs(newjet.pt() - CurrentJet.pt()) > 1e-7 ){
-    //   cout << CurrentJet.pt() << " ---> " << newjet.pt() << endl;
-    // }
-    // CurrentJet = newjet;
-    // CurrentJet.set_user_info ( newuserinfo );
     
     // Run SoftDrop and examine the output
     PseudoJet sd_jet = sd( CurrentJet );
-
-    // // DEBUG
-    // vector<PseudoJet> temp=reshuffle (CurrentJet.constituents());
-    // if ( CurrentJet.constituents().size() != temp.size() ){
-    //   cerr << " !!!" << CurrentJet.constituents().size() << "  " << temp.size() << endl;
-    //   throw -1;
-    // }
-    // JetDefinition TempJetDef    = JetDefinition( fastjet::cambridge_algorithm, 3*pars.R ); // gotta catch them all
-    // JetAnalyzer TempJA (temp, TempJetDef);
-    // vector<PseudoJet> shuffled = sorted_by_pt( select_jet ( TempJA.inclusive_jets() ) );
-    // // if ( shuffled.size() !=1 ) cerr << shuffled.size() << endl;
-    // // if ( shuffled.size() >1 ) cerr << " --> " << CurrentJet.pt() << "  " << shuffled.at(0).pt() << "  " << shuffled.at(1).pt()  << endl;
-    // // if ( shuffled.size() >1 ) cerr << " --> " << CurrentJet.eta() << "  " << shuffled.at(0).eta() << "  " << shuffled.at(1).eta()  << endl;
-    // // if ( shuffled.size() >1 ) cerr << " --> " << CurrentJet.constituents().size() << "  " << shuffled.at(0).constituents().size() << "  " << shuffled.at(1).constituents().size() << endl;
-    // if ( shuffled.size() ==0 ) continue;
-    // PseudoJet newjet = shuffled.at(0);
-    // PseudoJet sd_jet = sd( newjet );
-    // // END DEBUG
-    
-    // cout << CurrentJet.constituents().size() << endl;
-    // cout << " Grooming Result: " << CurrentJet.pt() << "  --> " << sd_jet.pt() << endl << endl;
     if ( sd_jet == 0){
       cout <<  " FOREGROUND Original Jet:   " << CurrentJet << endl;
       if ( pBackgroundSubtractor ) cout <<  " FOREGROUND rho A: " << JA.GetBackgroundEstimator()->rho() * CurrentJet.area() << endl;	  
@@ -976,27 +953,15 @@ EVENTRESULT EicAnalysis::RunEvent (){
       CurrentJet = (*pBackgroundSubtractor)( CurrentJet );	
     }
     double zg = sd_jet.structure_of<contrib::SoftDrop>().symmetry();
-
-    // if ( zg==0 ){
-    //   // cout << CurrentJet.constituents().size() << endl;
-    //   if ( CurrentJet.constituents().size() >5 ){
-    // 	cout << " === " << endl;
-    // 	for ( auto c : CurrentJet.constituents() ) cout << c << endl;
-    // 	cout << " ====== " << endl;
-    // 	cout << CurrentJet << endl;
-    // 	cout << sd_jet << endl;
-    //   }
-    // }
-
     GroomingResult.push_back ( GroomingResultStruct ( CurrentJet, sd_jet, zg ) );
 
     // cout << CurrentJet.pt() - sd_jet.pt() << endl;
     // Shouldn't be negative
-    if ( CurrentJet.pt() - sd_jet.pt() < -1e-7  && false )
+    if ( CurrentJet.pt() - sd_jet.pt() < -1e-7  && false ){
       cout << "CurrentJet.pt() is smaller than sd_jet.pt()"
 	   << CurrentJet.pt() - sd_jet.pt() << endl;
-    
-    
+    }
+        
   }  
   // By default, sort for original jet pt
   sort ( GroomingResult.begin(), GroomingResult.end(), GroomingResultStruct::origptgreater);

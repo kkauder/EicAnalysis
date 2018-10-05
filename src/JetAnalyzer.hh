@@ -54,6 +54,7 @@
 #include "fastjet/tools/JetMedianBackgroundEstimator.hh"
 #include "fastjet/contrib/ConstituentSubtractor.hh"
 
+#include "JetAnalysisUserInfos.hh"
 
 #include <TLorentzVector.h>
 #include <TClonesArray.h>
@@ -325,33 +326,6 @@ TLorentzVector MakeTLorentzVector ( const fastjet::PseudoJet& pj );
 */
 fastjet::PseudoJet MakePseudoJet ( const TLorentzVector* const lv );
 // =============================================================================
-// =============================================================================
-
-/** Simple UserInfo. Derived from PseudoJet::UserInfoBase. 
-    Currently just providing charge, please add as appropriate.
-    Based on 09-user__info_8cc_source.cc
- */
-class JetAnalysisUserInfo: public fastjet::PseudoJet::UserInfoBase {
-public:
-  /// Standard Constructor
-  JetAnalysisUserInfo(int quarkcharge=-999, std::string tag="", float number=-1) :  quarkcharge( quarkcharge ), tag ( tag), number(number){};
-  
-  /// Charge in units of e/3
-  int GetQuarkCharge() const { return quarkcharge; };
-
-  /// Multi-purpose description
-  std::string GetTag() const { return tag; };
-  // void SetTag( const std::string newtag ) { tag=newtag; };
-
-  /// Multi-purpose description
-  float GetNumber() const { return number; };
-  void SetNumber(const float f)  { number=f; };
-
-private:
-  const int quarkcharge;   ///< Charge in units of e/3
-  std::string tag;   ///< Multi-purpose
-  float number;   ///< Multi-purpose
-};
 
 // =============================================================================
 /** This shows how we can build a Selector that uses the user-defined
@@ -381,7 +355,12 @@ public:
   
   /// keeps the ones that have cmin <= quarkcharge <= cmax
   bool pass(const fastjet::PseudoJet &p) const{
-    const int & quarkcharge = p.user_info<JetAnalysisUserInfo>().GetQuarkCharge();
+    // alert user if something's missing
+    if ( !( p.has_user_info<JetAnalysisConstituentInfo>() )) {
+      throw std::runtime_error ("ChargeWorker: No JetAnalysisConstituentInfo attached.");
+    }
+
+    const int & quarkcharge = p.user_info<JetAnalysisConstituentInfo>().GetQuarkCharge();
     return (quarkcharge >= cmin) &&  (quarkcharge<= cmax);
   };
 
@@ -398,12 +377,15 @@ private:
 fastjet::Selector SelectorChargeRange( const int cmin=-999, const int cmax=999);
 
 // =============================================================================
-// =============================================================================
-// =============================================================================
 /** Helper to get an enum from a string
     we'll allow some more generous spellings and abbreviations
 */
 fastjet::JetAlgorithm AlgoFromString( std::string s);
 
+
+
+
+
+// =============================================================================
 
 #endif // JETANALYZER_H

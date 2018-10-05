@@ -152,7 +152,6 @@ private :
   TChain* Events = 0;
   TClonesArray* pFullEvent = 0;             ///< Constituents
   TClonesArray* pHardPartons = 0;           ///< For pythia data, the original hard scatter
-  TClonesArray* pHardPartonNames = 0;       ///< For pythia data, the original hard scatter names (ubar, g, ...)
 
   double Q2;
   double trueQ2;

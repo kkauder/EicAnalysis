@@ -4,6 +4,7 @@ INCFLAGS      = -I$(EICDIRECTORY)/include
 INCFLAGS      += -I$(ROOTSYS)/include
 #INCFLAGS      +=  -I$(FASTJETDIR)/include
 INCFLAGS      += -I./src
+INCFLAGS      += -I/direct/eic+u/eickolja/software/createJetTrees/StEpSimuJetMaker
 
 LIBPATH       = -L$(EICDIRECTORY)/lib
 ROOTLIBS      = $(shell root-config --libs)

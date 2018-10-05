@@ -10,6 +10,9 @@
 #include "AnalysisParameters.hh"
 #include "EicAnalysis.hh"
 
+#include "StEpSimuJet.h"
+#include "StEpSimuJetParticle.h"
+
 #include <TLorentzVector.h>
 #include <TClonesArray.h>
 #include <TChain.h>
@@ -146,16 +149,17 @@ int main( int argc, const char** argv ){
   
   TClonesArray HardPartons( "TLorentzVector" );
   ResultTree->Branch("HardPartons", &HardPartons );
-  TClonesArray HardPartonNames( "TObjString" );
-  ResultTree->Branch("HardPartonNames", &HardPartonNames );
 
-  TLorentzVector HT;
-  ResultTree->Branch("TriggerHT", &HT );
-
-  TClonesArray Jets( "TLorentzVector" );
+  TClonesArray Jets( "StEpSimuJet" );
   ResultTree->Branch("Jets", &Jets );
-  TClonesArray GroomedJets( "TLorentzVector" ); 
+  TClonesArray GroomedJets( "StEpSimuJet" );
   ResultTree->Branch("GroomedJets", &GroomedJets );
+
+  // TClonesArray Jets( "TLorentzVector" );
+  // ResultTree->Branch("Jets", &Jets );
+  // TClonesArray GroomedJets( "TLorentzVector" ); 
+  // ResultTree->Branch("GroomedJets", &GroomedJets );
+
   TClonesArray sj1( "TLorentzVector" );
   ResultTree->Branch("sj1", &sj1 );
   TClonesArray sj2( "TLorentzVector" );
@@ -289,45 +293,44 @@ int main( int argc, const char** argv ){
 
 
       TClonesArray* pHardPartons =  eic->GetHardPartons();
-      TClonesArray* pHardPartonNames =  eic->GetHardPartonNames();
       if ( pHardPartons ){
 	sv = (TLorentzVector*) HardPartons.ConstructedAt( 0 ); *sv = *( (TLorentzVector*) pHardPartons->At(0));
 	sv = (TLorentzVector*) HardPartons.ConstructedAt( 1 ); *sv = *( (TLorentzVector*) pHardPartons->At(1));
-	tobjs = (TObjString*)  HardPartonNames.ConstructedAt( 0 ); *tobjs = *( (TObjString*) pHardPartonNames->At( 0 ));
-	tobjs = (TObjString*)  HardPartonNames.ConstructedAt( 1 ); *tobjs = *( (TObjString*) pHardPartonNames->At( 1 ));
       }
       
       vector<GroomingResultStruct> GroomingResult = eic->GetGroomingResult(); 
       // sort ( GroomingResult.begin(), GroomingResult.end(), GroomingResultStruct::groomedptgreater);
       // sort ( GroomingResult.begin(), GroomingResult.end(), GroomingResultStruct::origptgreater);
-      
-      // cout << "-----------------------" << endl;
-      // for ( auto& gr : GroomingResult ){
-      // 	TLorentzVector lv = MakeTLorentzVector(gr.orig);
-      // 	cout << gr.orig.pt() << "  " << gr.groomed.pt() << "  " << gr.zg;
-      // 	if ( pHT && pHT->DeltaR( lv ) <pars.R ){
-      // 	  cout << " matched to trigger with pT=" << pHT->Pt() << endl;
-      // 	} else {
-      // 	  cout << endl;
-      // 	}
-      // }
-      
+            
       njets=GroomingResult.size();
       int ijet=0;
       for ( auto& gr : GroomingResult ){	
-	// cout << gr.orig << endl;
+	auto& origjet = gr.orig;
+	auto& groomedjet = gr.groomed;
 	
-	TLorentzVector sv = TLorentzVector( MakeTLorentzVector( gr.orig) );
-	// sv.SetCharge( gr.orig.user_info<JetAnalysisUserInfo>().GetQuarkCharge() / 3 );
-      
-	new ( Jets[ijet] )               TLorentzVector ( sv );
-	
-	new ( GroomedJets[ijet] )        TLorentzVector ( TLorentzVector( MakeTLorentzVector( gr.groomed) ) );
 	zg[ijet] = gr.zg;
-
-	delta_R[ijet]=gr.groomed.structure_of<contrib::SoftDrop>().delta_R();
-
+	delta_R[ijet]=groomedjet.structure_of<contrib::SoftDrop>().delta_R();
 	// nef[ijet] = gr.orig.user_info<JetAnalysisUserInfo>().GetNumber() ;
+
+	// Old - using TLorentzVector
+	// Also note that using constructed_at is better anyway
+	// TLorentzVector sv = TLorentzVector( MakeTLorentzVector( gr.orig) );
+	// sv.SetCharge( gr.orig.user_info<JetAnalysisUserInfo>().GetQuarkCharge() / 3 );      
+ 	// new ( Jets[ijet] )               TLorentzVector ( sv );
+	// new ( GroomedJets[ijet] )        TLorentzVector ( TLorentzVector( MakeTLorentzVector( gr.groomed) ) );
+
+
+	StEpSimuJet* Jet = (StEpSimuJet*) Jets.ConstructedAt( ijet );
+	*Jet = StEpSimuJet ( origjet.pt(),origjet.eta(),origjet.phi(),origjet.E() );
+	Jet->SetZg(gr.zg);
+	Jet->SetRg( groomedjet.structure_of<contrib::SoftDrop>().delta_R() );
+	Jet->SetNconsts(origjet.constituents().size());
+
+	StEpSimuJet* GroomedJet = (StEpSimuJet*) GroomedJets.ConstructedAt( ijet );
+	*GroomedJet = StEpSimuJet ( groomedjet.pt(),groomedjet.eta(),groomedjet.phi(),groomedjet.E() );
+	GroomedJet->SetZg(gr.zg);
+	GroomedJet->SetRg( groomedjet.structure_of<contrib::SoftDrop>().delta_R() );
+	GroomedJet->SetNconsts(groomedjet.constituents().size());
 
 	ijet++;
       }
@@ -336,8 +339,8 @@ int main( int argc, const char** argv ){
 
       const vector<PseudoJet>& particles = eic->GetParticles();
       for (auto& p : particles ){
-	if ( p.has_user_info<JetAnalysisUserInfo>() ){
-	  if ( abs( p.user_info<JetAnalysisUserInfo>().GetQuarkCharge() )>0 ){
+	if ( p.has_user_info<JetAnalysisConstituentInfo>() ){
+	  if ( abs( p.user_info<JetAnalysisConstituentInfo>().GetQuarkCharge() )>0 ){
 	    cptphieta->Fill(p.pt(),p.phi(),p.eta());
 	  } else {
 	    nptphieta->Fill(p.pt(),p.phi(),p.eta());
