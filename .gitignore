@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+# Miscellaneous
+*~
+*.root
+CondorFile
+bin
+logs
+Data
+Results

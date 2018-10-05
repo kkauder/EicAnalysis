@@ -16,7 +16,7 @@ echo "getenv = true" >>CondorFile
 set NameBase=Breit
 
 # split into chunks
-set base = extraSimu/PYTHIA/ep/TREES/*Q2=10.0-100*root
+set base = Data/extraSimu/PYTHIA/ep/TREES/*Q2=10.0-100*root
 
 foreach input ( ${base}* )
     # arguments

@@ -102,8 +102,8 @@ public :
 
   // epTree example
   // ----------
-  // TString InputName = "eic0009/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.root"; ///< Input name
-  // TString InputName = "eic0009/PYTHIA/ep/TREES/pythia.ep.27x920.5Mevents.1.RadCor=0.Q2-0.1.root"; ///< Input name
+  // TString InputName = "Data/eic0009/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.root"; ///< Input name
+  // TString InputName = "Data/eic0009/PYTHIA/ep/TREES/pythia.ep.27x920.5Mevents.1.RadCor=0.Q2-0.1.root"; ///< Input name
   //  TString InputName = "/gpfs/mnt/gpfs02/eic/bpage/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.Q2=10.0-100.0.kT=1.0_99.root"; ///< Input name
   TString InputName = "/gpfs/mnt/gpfs02/eic/bpage/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.Q2=10.0-100.0.kT=1.0_9*.root"; ///< Input name
   INTYPE intype = EPTREE;             ///< Input type
