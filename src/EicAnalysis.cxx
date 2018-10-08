@@ -230,11 +230,11 @@ EicAnalysis::EicAnalysis ( const int argc, const char** const argv )
       pars.fTowScale = 1.0 + pars.IntTowScale*pars.fTowUnc;
       cout << "Setting tower scale to " << pars.fTowScale << endl;
       if ( pars.IntTowScale<-1 || pars.FakeEff>1 ){ argsokay=false; break; }
-    } else if ( arg == "-jetnef" ){
-      if ( ++parg == arguments.end() ){ argsokay=false; break; }
-      pars.MaxJetNEF = atof( parg->data());
-      cout << "Setting Max Jet NEF to " << pars.MaxJetNEF << endl;
-      if ( pars.MaxJetNEF<0 || pars.MaxJetNEF>1 ){ argsokay=false; break; }      
+    // } else if ( arg == "-jetnef" ){
+    //   if ( ++parg == arguments.end() ){ argsokay=false; break; }
+    //   pars.MaxJetNEF = atof( parg->data());
+    //   cout << "Setting Max Jet NEF to " << pars.MaxJetNEF << endl;
+    //   if ( pars.MaxJetNEF<0 || pars.MaxJetNEF>1 ){ argsokay=false; break; }      
     } else {
       argsokay=false;
       break;
@@ -426,8 +426,9 @@ EVENTRESULT EicAnalysis::RunEvent (){
   
   // Reset results (from last event)
   // -------------------------------
-  GroomingResult.clear();
+  Result.clear();
   weight=1;
+  process=-1;
   partons.clear();
   particles.clear();
 
@@ -441,10 +442,12 @@ EVENTRESULT EicAnalysis::RunEvent (){
       break;
     }
     if ( !(evi%500) ) cout << "Working on " << evi << " / " << NEvents << endl;
+    // if ( !(evi%1) ) cout << "Working on " << evi << " / " << NEvents << endl;
     inEvent->Clear();
     Events->GetEntry(evi);
     eventid = 0;
     runid = 0;
+    process=inEvent->GetProcess();
 
     ++evi;
     break;
@@ -471,20 +474,21 @@ EVENTRESULT EicAnalysis::RunEvent (){
   InitialBeam.clear();
   InitialEandGamma.clear();
   InitialRest.clear();
+  ShowerInitiators.clear();
   FinalElectrons.clear();
   FinalRest.clear();
   Remainder.clear();
 
      
   if ( pars.intype == EPTREE )  {
-    if ( nparticles < 5 ) {
+    if ( nparticles < 11 ) {
       throw std::runtime_error("Not enough particles in the event");
     }
     
     for ( int i=0 ; i<nparticles ; ++i ){
       inParticle = inEvent->GetTrack(i);
-      auto info = inParticle->Id().Info();
 
+      auto info = inParticle->Id().Info();
       // Let's keep track of unusual particles, which lead to problems with Id().Info()
       // check QCD effective states in http://home.fnal.gov/~mrenna/lutp0613man2/node44.html
       if ( !info ){
@@ -504,6 +508,12 @@ EVENTRESULT EicAnalysis::RunEvent (){
 	}
       }
 
+      // catch lines 10 and 11 first
+      // NOTE that they will be duplicated in InitialRest!
+      if (i==9 || i==10  ) {
+	ShowerInitiators.push_back(*inParticle);
+	// cout << i << "  " << inParticle->id << "  " << inParticle->GetPt() << "  " << inParticle->GetE() << endl;
+      }
 
       switch ( inParticle->GetStatus() ){
 	// more or less pre-collision
@@ -525,8 +535,11 @@ EVENTRESULT EicAnalysis::RunEvent (){
 	// Final state. This is what we could detect
 	// -----------------------------------------
       case 1 : // status
-	if ( inParticle->Id() == 11 ) FinalElectrons.push_back ( *inParticle );
-	else                             FinalRest.push_back ( *inParticle );
+	if ( inParticle->Id() == 11 ) {
+	  FinalElectrons.push_back ( *inParticle );
+	} else {
+	  FinalRest.push_back ( *inParticle );
+	}
 	break;
 
 	// Some intermediate state.
@@ -598,8 +611,6 @@ EVENTRESULT EicAnalysis::RunEvent (){
   default :
     throw std::runtime_error("Unknown KinematicsMethod");    
   }
-
-
 
   // // Some experiments about kinematics
   // // ---------------------------------
@@ -745,10 +756,10 @@ EVENTRESULT EicAnalysis::RunEvent (){
     boostedpj.boost ( breitboost );
     boostedpj = rotateZ(boostedpj, -phi_proton);
     boostedpj = rotateY(boostedpj, -theta_proton);
-    boosted_particles.push_back( boostedpj);
-    
     // UserInfo isn't copied (and gets lost during rotation anyway) 
     boostedpj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
+    boosted_particles.push_back( boostedpj);
+    
   }
 
   // Remaining hadrons
@@ -774,19 +785,63 @@ EVENTRESULT EicAnalysis::RunEvent (){
     boostedpj.boost ( breitboost );
     boostedpj = rotateZ(boostedpj, -phi_proton);
     boostedpj = rotateY(boostedpj, -theta_proton);
-    boosted_particles.push_back( boostedpj);
-
     // UserInfo isn't copied (and gets lost during rotation anyway) 
     boostedpj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
-    // cout << boostedpj.user_info<JetAnalysisConstituentInfo>().GetPdg() << endl;
+    boosted_particles.push_back( boostedpj);
+  }
+
+  // Also boost and remember shower initiators
+  vector<PseudoJet> lab_initiators;
+  vector<PseudoJet> boosted_initiators;
+
+  //cout << " =============================================" << endl;
+  for ( auto i = 1; i<ShowerInitiators.size (); ++i ){
+    auto& s = ShowerInitiators.at(i);
+
+    // CUTS
+    // if ( s.GetPt()< pars.PtConsMin )             continue;
+    // if ( fabs( e.GetEta() )>pars.EtaConsCut )    continue;
+    
+    // Make pseudojet
+    PseudoJet pj =  PseudoJet ( s.Get4Vector() );
+
+    // Attach information via user_info here
+    TParticlePDG* info = s.Id().Info();
+    if ( !info ) 	  throw std::runtime_error("Found unexpected PID");
+    auto qcharge=info->Charge();
+    auto pdgcode=info->PdgCode();
+    pj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
+    lab_initiators.push_back( pj );
+
+    // Boost and rotate to Breit Frame
+    // TODO: Check this math!    
+    PseudoJet boostedpj =  pj;
+    boostedpj.boost ( breitboost );
+    boostedpj = rotateZ(boostedpj, -phi_proton);
+    boostedpj = rotateY(boostedpj, -theta_proton);
+    // UserInfo isn't copied (and gets lost during rotation anyway) 
+    boostedpj.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode ) );
+    boosted_initiators.push_back( boostedpj);
+
+    // cout << s.GetPt() << "  " << s.GetM()  << "  " << s.GetRapidity()  << "  " << s.GetPhi() << endl
+    // 	 << pj << endl
+    // 	 << boostedpj << endl;
+    
   }
 
   // Which ones to use?
+  // ------------------
   if ( pars.BreitFrame ) {
     particles = boosted_particles;
+    initiators = boosted_initiators;
   } else {
     particles = lab_particles;
+    initiators = lab_initiators;
   }
+
+  // for ( auto a : particles ){
+  //   cout << a.user_info<JetAnalysisConstituentInfo>().Pdg() << endl;
+  // }
   
   if ( particles.size()==0 ) return EVENTRESULT::NOCONSTS;
 
@@ -920,51 +975,101 @@ EVENTRESULT EicAnalysis::RunEvent (){
   // cout << "We have " << njets << " jets. " << endl;
 
   for (unsigned ijet = 0; ijet < JAResult.size(); ijet++) {
-    PseudoJet& CurrentJet = JAResult[ijet];
+    auto& CurrentJet = JAResult[ijet];
 
-    // // Check whether it fulfills neutral energy fraction criteria
-    // // This could be done earlier in the jet selector
-    // PseudoJet NeutralPart = join ( OnlyNeutral( CurrentJet.constituents() ) );
-    // PseudoJet ChargedPart = join ( OnlyCharged( CurrentJet.constituents() ) );
-    // double q = 0;
-    // for ( PseudoJet& c : ChargedPart.constituents() ){
-    //   q+= c.user_info<JetAnalysisUserInfo>().GetQuarkCharge();
-    // }
-    
-    // JetAnalysisUserInfo* userinfo = new JetAnalysisUserInfo( q );
-    // // Save neutral energy fraction in multi-purpose field
-    // userinfo->SetNumber(NeutralPart.pt()  / CurrentJet.pt());
-    // CurrentJet.set_user_info ( userinfo );
+    // Check whether it fulfills neutral energy fraction criteria
+    // This could be done earlier in the jet selector
+    // changed from comparing pt() to constituent counts
+    // TODO: Not sure we really want that (think about fractional charges at parton level)
+    // UPDATE: In fact, let's not do it at all for now (makes little sense at truth level)
+    // if ( pars.MaxJetNEF<1.0 &&  nef > pars.MaxJetNEF ) continue;
 
-    // if ( pars.MaxJetNEF<1.0 &&  NeutralPart.pt()  / CurrentJet.pt() > pars.MaxJetNEF ) continue;
-    
     // Run SoftDrop and examine the output
-    PseudoJet sd_jet = sd( CurrentJet );
-    if ( sd_jet == 0){
+    PseudoJet GroomedJet = sd( CurrentJet );
+    if ( GroomedJet == 0){
       cout <<  " FOREGROUND Original Jet:   " << CurrentJet << endl;
       if ( pBackgroundSubtractor ) cout <<  " FOREGROUND rho A: " << JA.GetBackgroundEstimator()->rho() * CurrentJet.area() << endl;	  
       if ( pBackgroundSubtractor ) cout <<  " FOREGROUND Subtracted Jet: " << (*pBackgroundSubtractor)( CurrentJet ) << endl;	  
       cout << " --- Skipped. Something caused SoftDrop to return 0 ---" << endl;
       continue;
     }
-
+    
+    double zg = GroomedJet.structure_of<contrib::SoftDrop>().symmetry();
+    double rg = GroomedJet.structure_of<contrib::SoftDrop>().delta_R();
+    
+    // Now do area subtraction
     if ( pars.SubtractBg == AREA) {
       // cout << "hello subtractor " << ijet << endl;
-      CurrentJet = (*pBackgroundSubtractor)( CurrentJet );	
+      CurrentJet = (*pBackgroundSubtractor)( CurrentJet );
     }
-    double zg = sd_jet.structure_of<contrib::SoftDrop>().symmetry();
-    GroomingResult.push_back ( GroomingResultStruct ( CurrentJet, sd_jet, zg ) );
 
-    // cout << CurrentJet.pt() - sd_jet.pt() << endl;
-    // Shouldn't be negative
-    if ( CurrentJet.pt() - sd_jet.pt() < -1e-7  && false ){
-      cout << "CurrentJet.pt() is smaller than sd_jet.pt()"
-	   << CurrentJet.pt() - sd_jet.pt() << endl;
+    // ADD MORE OBSERVABLES HERE -- ptD, girth, angularity, ...
+    
+    // Put together information and add to jets
+    // ----------------------------------------
+    // FIXME: Determine nef and charge after subtraction or before?
+    float nef=-1;
+    int q=-999;
+    // original
+    auto NeutralPart = join ( OnlyNeutral( CurrentJet.constituents() ) );
+    auto ChargedPart = join ( OnlyCharged( CurrentJet.constituents() ) );    
+    nef = float (NeutralPart.constituents().size()) / float(CurrentJet.constituents().size());
+    q = 0;
+    for ( PseudoJet& c : ChargedPart.constituents() ){
+      q+= c.user_info<JetAnalysisConstituentInfo>().QuarkCharge();
+    }    
+    auto CurrentInfo = new JetAnalysisJetInfo ( q, nef, zg, rg );
+    CurrentJet.set_user_info ( CurrentInfo );
+
+    //groomed
+    auto GroomedNeutralPart = join ( OnlyNeutral( GroomedJet.constituents() ) );
+    auto GroomedChargedPart = join ( OnlyCharged( GroomedJet.constituents() ) );
+    nef = float (NeutralPart.constituents().size()) / float(CurrentJet.constituents().size());
+    q = 0;
+    for ( PseudoJet& c : ChargedPart.constituents() ){
+      q+= c.user_info<JetAnalysisConstituentInfo>().QuarkCharge();
+    }    
+    auto GroomedInfo = new JetAnalysisJetInfo ( q, nef, zg, rg );
+    GroomedJet.set_user_info ( GroomedInfo );
+
+    // Check for matching
+    // matched to an initiator?
+    PseudoJet matchedparton;
+    bool matched=false;
+    for ( auto& initiator : initiators ){
+      if ( IsMatched( CurrentJet, initiator, pars.R ) ){
+	// cout << "Matched Jet " << endl 
+	//      << CurrentJet << " to " << endl
+	//      << initiator << endl;
+	if ( matched ) {
+	  cerr << "matched more than once!" << endl;
+	}
+	matched=true;
+	matchedparton = initiator;
+	// copy info
+	auto& partoninfo = initiator.user_info<JetAnalysisConstituentInfo>();
+	auto qcharge=partoninfo.QuarkCharge();
+	auto pdgcode=partoninfo.Pdg();
+	matchedparton.set_user_info ( new JetAnalysisConstituentInfo( qcharge, pdgcode) );
+      }
     }
+
+
+    // And save into container
+    Result.push_back ( ResultStruct ( CurrentJet, GroomedJet, matchedparton ) );
+
+    // // cout << CurrentJet.pt() - sd_jet.pt() << endl;
+    // // Shouldn't be negative
+    // if ( CurrentJet.pt() - sd_jet.pt() < -1e-7  && false ){
+    //   cout << "CurrentJet.pt() is smaller than sd_jet.pt()"
+    // 	   << CurrentJet.pt() - sd_jet.pt() << endl;
+    // }
         
   }  
   // By default, sort for original jet pt
-  sort ( GroomingResult.begin(), GroomingResult.end(), GroomingResultStruct::origptgreater);
+  sort ( Result.begin(), Result.end(), ResultStruct::origptgreater);
+  
+
   
   return EVENTRESULT::JETSFOUND;
 }

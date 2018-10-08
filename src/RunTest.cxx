@@ -12,6 +12,7 @@
 
 #include "StEpSimuJet.h"
 #include "StEpSimuJetParticle.h"
+#include "StEpSimuParticle.h"
 
 #include <TLorentzVector.h>
 #include <TClonesArray.h>
@@ -155,10 +156,8 @@ int main( int argc, const char** argv ){
   TClonesArray GroomedJets( "StEpSimuJet" );
   ResultTree->Branch("GroomedJets", &GroomedJets );
 
-  // TClonesArray Jets( "TLorentzVector" );
-  // ResultTree->Branch("Jets", &Jets );
-  // TClonesArray GroomedJets( "TLorentzVector" ); 
-  // ResultTree->Branch("GroomedJets", &GroomedJets );
+  TClonesArray MatchedPartons( "StEpSimuJetParticle" );
+  ResultTree->Branch("MatchedPartons", &MatchedPartons );
 
   TClonesArray sj1( "TLorentzVector" );
   ResultTree->Branch("sj1", &sj1 );
@@ -169,12 +168,6 @@ int main( int argc, const char** argv ){
   
   int njets=0;
   ResultTree->Branch("njets",   &njets, "njets/I" );
-  double zg[1000];
-  ResultTree->Branch("zg",       zg, "zg[njets]/D" );
-  double delta_R[1000];
-  ResultTree->Branch("delta_R",  delta_R, "delta_R[njets]/D" );
-  double nef[1000];
-  ResultTree->Branch("nef",  nef, "nef[njets]/D" );
   double mu[1000];
   ResultTree->Branch("mu",       mu, "mu[njets]/D" );
   double rho=-1;
@@ -189,7 +182,9 @@ int main( int argc, const char** argv ){
   double trueX=-999;
   ResultTree->Branch("trueX",   &trueX, "trueX/D" );
 
-
+  int PythiaProcess=0;
+  ResultTree->Branch("PythiaProcess",   &PythiaProcess, "PythiaProcess/I" );
+  
 
   double zg1[1000];
   double zg2[1000];
@@ -228,6 +223,7 @@ int main( int argc, const char** argv ){
       HardPartons.Clear();
       Jets.Clear();
       GroomedJets.Clear();
+      MatchedPartons.Clear();
 
       //   sj1.Clear();
       //   sj2.Clear();
@@ -236,8 +232,6 @@ int main( int argc, const char** argv ){
       runid   =-(INT_MAX-1);
       eventid =-(INT_MAX-1);
 
-      // for ( auto i=0; i<sizeof(zg) / sizeof(zg[0]); ++i ) zg[i]=0;
-      std::fill_n( zg, sizeof(zg)/ sizeof(zg[0]), 0);
       EVENTRESULT ret=eic->RunEvent();
 
       // Understand what happened in the event
@@ -285,7 +279,8 @@ int main( int argc, const char** argv ){
       rho = eic->GetRho();
       runid = eic->GetRunid();
       eventid = eic->GetEventid();
-      
+      PythiaProcess = eic->GetProcessId();
+
       Q2 = eic->GetQ2();
       trueQ2 = eic->GetTrueQ2();
       X = eic->GetX();
@@ -298,40 +293,62 @@ int main( int argc, const char** argv ){
 	sv = (TLorentzVector*) HardPartons.ConstructedAt( 1 ); *sv = *( (TLorentzVector*) pHardPartons->At(1));
       }
       
-      vector<GroomingResultStruct> GroomingResult = eic->GetGroomingResult(); 
-      // sort ( GroomingResult.begin(), GroomingResult.end(), GroomingResultStruct::groomedptgreater);
-      // sort ( GroomingResult.begin(), GroomingResult.end(), GroomingResultStruct::origptgreater);
+      auto Result = eic->GetResult(); 
+      // sort ( Result.begin(), Result.end(), ResultStruct::groomedptgreater);
+      // sort ( Result.begin(), Result.end(), ResultStruct::origptgreater);
             
-      njets=GroomingResult.size();
+      njets=Result.size();
       int ijet=0;
-      for ( auto& gr : GroomingResult ){	
+      for ( auto& gr : Result ){	
 	auto& origjet = gr.orig;
 	auto& groomedjet = gr.groomed;
-	
-	zg[ijet] = gr.zg;
-	delta_R[ijet]=groomedjet.structure_of<contrib::SoftDrop>().delta_R();
-	// nef[ijet] = gr.orig.user_info<JetAnalysisUserInfo>().GetNumber() ;
 
-	// Old - using TLorentzVector
-	// Also note that using constructed_at is better anyway
-	// TLorentzVector sv = TLorentzVector( MakeTLorentzVector( gr.orig) );
-	// sv.SetCharge( gr.orig.user_info<JetAnalysisUserInfo>().GetQuarkCharge() / 3 );      
- 	// new ( Jets[ijet] )               TLorentzVector ( sv );
-	// new ( GroomedJets[ijet] )        TLorentzVector ( TLorentzVector( MakeTLorentzVector( gr.groomed) ) );
-
+	auto& originfo = origjet.user_info<JetAnalysisJetInfo>();
+	auto origq = originfo.QuarkCharge();
+	auto orignef = originfo.Nef();
+	// these should be identical between the two, but can't hurt to check
+	auto origzg = originfo.Zg();
+	auto origrg = originfo.Rg();
 
 	StEpSimuJet* Jet = (StEpSimuJet*) Jets.ConstructedAt( ijet );
 	*Jet = StEpSimuJet ( origjet.pt(),origjet.eta(),origjet.phi(),origjet.E() );
-	Jet->SetZg(gr.zg);
-	Jet->SetRg( groomedjet.structure_of<contrib::SoftDrop>().delta_R() );
+	Jet->SetZg( origzg );
+	Jet->SetRg( origrg );
+	Jet->SetQuarkCharge( origq );
+	Jet->SetNef( orignef );
 	Jet->SetNconsts(origjet.constituents().size());
+
+	auto& groomedinfo = groomedjet.user_info<JetAnalysisJetInfo>();
+	auto groomedq = groomedinfo.QuarkCharge();
+	auto groomednef = groomedinfo.Nef();
+	// these should be identical between the two, but can't hurt to check
+	auto groomedzg = groomedinfo.Zg();
+	auto groomedrg = groomedinfo.Rg();
 
 	StEpSimuJet* GroomedJet = (StEpSimuJet*) GroomedJets.ConstructedAt( ijet );
 	*GroomedJet = StEpSimuJet ( groomedjet.pt(),groomedjet.eta(),groomedjet.phi(),groomedjet.E() );
-	GroomedJet->SetZg(gr.zg);
-	GroomedJet->SetRg( groomedjet.structure_of<contrib::SoftDrop>().delta_R() );
+	GroomedJet->SetZg( groomedzg );
+	GroomedJet->SetRg( groomedrg );
+	GroomedJet->SetQuarkCharge( groomedq );
+	GroomedJet->SetNef( groomednef );
 	GroomedJet->SetNconsts(groomedjet.constituents().size());
 
+
+	// Get parton matching information
+	StEpSimuJetParticle* MatchedParton = (StEpSimuJetParticle*) MatchedPartons.ConstructedAt( ijet );
+	auto matchedparton = gr.matchedparton;
+	if ( matchedparton != 0 ) {
+	  auto mpinfo = matchedparton.user_info<JetAnalysisConstituentInfo>();
+	  //cout << matchedparton.user_info<JetAnalysisConstituentInfo>().Pdg() << endl;
+	  // MatchedParton -> SetId (matchedparton.user_info<JetAnalysisConstituentInfo>().Pdg());
+	  *MatchedParton = StEpSimuJetParticle(matchedparton.pt(), matchedparton.eta(), matchedparton.phi(), matchedparton.e());
+	  MatchedParton->SetPdgCode( mpinfo.Pdg());
+	  MatchedParton->SetQuarkCharge( mpinfo.QuarkCharge());
+	} else {
+	  // Dummy if there's no match
+	  *MatchedParton = StEpSimuJetParticle(0,0,0,0,0,-999);
+	}
+	  
 	ijet++;
       }
       
@@ -340,7 +357,7 @@ int main( int argc, const char** argv ){
       const vector<PseudoJet>& particles = eic->GetParticles();
       for (auto& p : particles ){
 	if ( p.has_user_info<JetAnalysisConstituentInfo>() ){
-	  if ( abs( p.user_info<JetAnalysisConstituentInfo>().GetQuarkCharge() )>0 ){
+	  if ( abs( p.user_info<JetAnalysisConstituentInfo>().QuarkCharge() )>0 ){
 	    cptphieta->Fill(p.pt(),p.phi(),p.eta());
 	  } else {
 	    nptphieta->Fill(p.pt(),p.phi(),p.eta());
