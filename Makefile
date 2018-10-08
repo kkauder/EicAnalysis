@@ -15,17 +15,8 @@ LIBS          = -lfastjet -lfastjettools  -lConstituentSubtractor  -lRecursiveTo
 # LIBS          += -lpythia8  -llhapdfdummy -lTStarJetPico
 
 LIBPATH       += -L./lib
-# LIBS	      += -lMyJetlib
-
 LIBPATH       += -L/afs/rhic.bnl.gov/eic/lib -L/eic/u/eickolja/software/createJetTrees/StEpSimuJetMaker
 LIBS          += -leicsmear -lStEpSimuJetEvent
-
-
-#INCFLAGS      += -I$(PYTHIA8DIR)/include -I$(PYTHIA8DIR)/include/Pythia8/ -I$(STARPICOPATH)
-
-#INCFLAGS      += -I/afs/rhic.bnl.gov/eic/PACKAGES/EicRoot/eic-smear/include/
-#INCFLAGS      += -I/afs/rhic.bnl.gov/eic/include/
-#INCFLAGS      += -I/afs/rhic.bnl.gov/eic/env/new/include/
 
 
 ifeq ($(os),Linux)
@@ -62,6 +53,7 @@ BDIR          = bin
 ################### Remake when these headers are touched #####################
 ###############################################################################
 INCS = $(SDIR)/JetAnalyzer.hh $(SDIR)/AnalysisParameters.hh $(SDIR)/EicEnums.hh
+INCS += $(SDIR)/JetAnalysisUserInfos.hh
 INCS += $(SDIR)/EicAnalysis.hh
 
 ###############################################################################
