@@ -360,7 +360,7 @@ public:
       throw std::runtime_error ("ChargeWorker: No JetAnalysisConstituentInfo attached.");
     }
 
-    const int & quarkcharge = p.user_info<JetAnalysisConstituentInfo>().GetQuarkCharge();
+    const int & quarkcharge = p.user_info<JetAnalysisConstituentInfo>().QuarkCharge();
     return (quarkcharge >= cmin) &&  (quarkcharge<= cmax);
   };
 

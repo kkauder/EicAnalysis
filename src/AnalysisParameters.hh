@@ -56,9 +56,9 @@ public :
   double PtJetMin = 1.0;      ///< Min jet pT
   double PtJetMax = 1000.0;   ///< Max jet pT
   double LeadPtMin=1.0;                 ///< leading jet minimum p<SUB>T</SUB>
-    
+
+  // Disabled while working at truth level
   // double MaxJetNEF=0.9;       ///< Max neutral energy fraction
-  double MaxJetNEF=1.0;       ///< Max neutral energy fraction
 
   double EtaConsCut = 10.0;    ///< Constituent |&eta;| acceptance
   double PtConsMin=0.0;        ///< Constituent pT minimum
@@ -105,7 +105,8 @@ public :
   // TString InputName = "Data/eic0009/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.root"; ///< Input name
   // TString InputName = "Data/eic0009/PYTHIA/ep/TREES/pythia.ep.27x920.5Mevents.1.RadCor=0.Q2-0.1.root"; ///< Input name
   //  TString InputName = "/gpfs/mnt/gpfs02/eic/bpage/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.Q2=10.0-100.0.kT=1.0_99.root"; ///< Input name
-  TString InputName = "/gpfs/mnt/gpfs02/eic/bpage/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.Q2=10.0-100.0.kT=1.0_9*.root"; ///< Input name
+  // TString InputName = "/gpfs/mnt/gpfs02/eic/bpage/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.Q2=10.0-100.0.kT=1.0_9*.root"; ///< Input name
+  TString InputName = "/gpfs/mnt/gpfs02/eic/bpage/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.1Mevents.RadCor=0.Q2=10.0-100.0.kT=1.0_11.root"; ///< Input name
   INTYPE intype = EPTREE;             ///< Input type
   TString ChainName = "EICTree";         ///< Name of the input chain
   TString TriggerName = "All";        ///< Trigger type (All, MB, HT, pp, ppHT, ppJP)

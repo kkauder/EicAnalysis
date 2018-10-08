@@ -64,21 +64,31 @@ struct PseudoJetPtGreater {
 
 /**
   To keep original and groomed jets connected
+  Can add other jet-by-jet (pair) observables and information
  */
-class GroomingResultStruct{
+class ResultStruct{
 public:
   PseudoJet orig;
   PseudoJet groomed;
-  double zg;
-  GroomingResultStruct ( PseudoJet orig, PseudoJet groomed, double zg )
-    : orig(orig), groomed(groomed),zg(zg)
+  PseudoJet matchedparton;
+
+  ResultStruct ( PseudoJet orig, PseudoJet groomed, PseudoJet matchedparton )
+    : orig(orig), 
+      groomed(groomed),
+      matchedparton(matchedparton)
   {};
   
-  static bool origptgreater( GroomingResultStruct const & a, GroomingResultStruct const & b) { 
+  /**
+     Helper for sorting by original pt
+   */
+  static bool origptgreater( ResultStruct const & a, ResultStruct const & b) { 
     return a.orig.pt()>b.orig.pt();
   };
   
-  static bool groomedptgreater( GroomingResultStruct const & a, GroomingResultStruct const & b) { 
+  /**
+     Helper for sorting by groomed pt
+   */
+  static bool groomedptgreater( ResultStruct const & a, ResultStruct const & b) { 
     return a.groomed.pt()>b.groomed.pt();
   };
   
@@ -127,6 +137,13 @@ private :
   vector <Particle> InitialBeam; //< lines 1-2
   vector <Particle> InitialEandGamma; //< lines 3-4
   vector <Particle> InitialRest; //< lines with status 21
+
+  /// lines 10 and 11 (i.e. track number = 9, 10)
+  /// For ep, this means 4 and 5 are
+  /// the gamma* and p, 6 and 7 the shower initiators, 8 and 9 the incoming
+  /// partons to the hard interaction, and 10 and 11 the outgoing  ones.
+  vector <Particle> ShowerInitiators;
+
   vector <Particle> FinalElectrons; //< expect the first one to be "the" electron (~line 12), but of course there may be more...
   vector <Particle> FinalRest; //< lines 13+ with status 1
   vector <Particle> Remainder; //< Everything from statuses 11, 12
@@ -159,6 +176,7 @@ private :
   double trueX;
 
   vector<PseudoJet> particles;
+  vector<PseudoJet> initiators;
   vector<PseudoJet> partons;
   double rho=0;                             ///< background density
   
@@ -180,6 +198,9 @@ private :
   int runid;
   int Embeventid;
   int Embrunid;
+
+  // PYTHIA process id
+  int process;
 
   double refmult=0;
   double Embrefmult=0;
@@ -215,7 +236,7 @@ private :
   // Results to be passed around
   TClonesArray *pSavedHardPartons=0;           ///< original hard scatter in PYTHIA
   TClonesArray *pSavedHardPartonNames=0;       ///< original hard scatter PID in PYTHIA
-  vector<GroomingResultStruct> GroomingResult; ///< grooming result in a nice structured package
+  vector<ResultStruct> Result;                 ///< grooming result in a nice structured package
 
   erhic::EventPythia* inEvent;
     
@@ -259,6 +280,9 @@ public:
   /// Get the refmult of the current event
   inline double GetRefmult()           { return refmult; };
 
+  /// Get the pythia process id of the current event
+  inline double GetProcessId()           { return process; };
+
   /// Get the runid of the current event
   inline double GetRunid()           { return runid; };
 
@@ -266,7 +290,7 @@ public:
   inline double GetEventid()           { return eventid; };
 
   /// The main result of the analysis
-  inline const vector<GroomingResultStruct>& GetGroomingResult()    { return GroomingResult; }
+  inline const vector<ResultStruct>& GetResult()     { return Result; }
 
   inline TClonesArray* GetHardPartons()              { return pSavedHardPartons; }
   inline TClonesArray* GetHardPartonNames()          { return pSavedHardPartonNames; }
