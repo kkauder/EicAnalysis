@@ -13,10 +13,24 @@ echo "getenv = true" >>CondorFile
 # echo "Notification = Complete" >> CondorFile
 # echo "Notify_user  = kkauder@gmail.com"  >> CondorFile
 
-set NameBase=Breit
+set breit = 0
+
+switch ($breit)
+    case 0 : 
+    set NameBase=Lab
+    breaksw
+    case 1 : 
+    set NameBase=Breit
+    breaksw
+    default : 
+    echo "unknown breit setting $breit"
+    exit -1
+endsw
+
 
 # split into chunks
-set base = Data/extraSimu/PYTHIA/ep/TREES/*Q2=10.0-100*root
+#set base = Data/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.*Q2=10.0-100*root
+set base = Data/extraSimu/PYTHIA/ep/TREES/pythia.ep.20x250.*root
 
 foreach input ( ${base}* )
     # arguments
@@ -29,7 +43,7 @@ foreach input ( ${base}* )
     set ErrFile    = logs/${NameBase}_${OutBase}.err
 
     ### hand to condor
-    set Args = ( -o $OutName -i $Files -breit 1 )
+    set Args = ( -o $OutName -i $Files -breit $breit )
     echo "" >> CondorFile
     echo "Output       = ${LogFile}" >> CondorFile
     echo "Error        = ${ErrFile}" >> CondorFile
